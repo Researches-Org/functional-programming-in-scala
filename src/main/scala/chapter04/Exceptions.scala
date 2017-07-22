@@ -60,6 +60,19 @@ object Exceptions {
       xs.sum / xs.length
   }
 
+  /**
+    * The return type now reflects the possibility that the result may not always be defined.
+    * We still always return a result of the declared type (now Option[Double]) from our
+    * function, so mean is now a total function. It takes each value of the input type to exactly
+    * one value of the output type.
+    */
+  def mean_2(xs: Seq[Double]): Option[Double] = {
+    if (xs.isEmpty)
+      None
+    else
+      Some(xs.sum / xs.length)
+  }
+
   def main(args: Array[String]): Unit = {
     println(failingFn2(12))
 
