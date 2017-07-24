@@ -98,6 +98,46 @@ sealed trait Stream[+A] {
     foldRight(empty[B])((a, b) => f(a) append  b)
 
   def find(p: A => Boolean): Option[A] = filter(p).headOption
+
+  /**
+    * Use unfold to implement map, take, takeWhile, zipWith (as in chapter 3), and
+    * zipAll. The zipAll function should continue the traversal as long as either stream
+    * has more elements—it uses Option to indicate whether each stream has been
+    * exhausted.
+    */
+
+  def mapViaUnfold[B](f: A => B): Stream[B] =
+    unfold(this) {
+      case Empty => None
+      case Cons(h, t) => Some( f(h()), t() )
+    }
+
+  def takeViaUnfold(n: Int): Stream[A] =
+    unfold(this, n) (s => s._1 match {
+      case Cons(h, t) if (s._2 > 0) => Some(h(), (t(), n - 1))
+      case _                        => None
+
+    })
+
+  def takeWhileViaUnfold(p: A => Boolean): Stream[A] =
+    unfold(this) {
+      case Cons(h, t) if (p(h())) => Some(h(), t())
+      case _                      => None
+    }
+
+  def zipWith[B, C](s2: Stream[B])(f: (A, B) => C): Stream[C] =
+    unfold((this, s2)) {
+      case (Cons(h1, t1), Cons(h2, t2)) => Some(f(h1(), h2()), (t1(), t2()))
+      case _                            => None
+    }
+
+  def zipAll[B](s2: Stream[B]): Stream[(Option[A],Option[B])] =
+    unfold((this, s2)) {
+      case (Cons(h1, t1), Cons(h2, t2)) => Some((Some(h1()), Some(h2())), (t1(), t2()))
+      case (Cons(h, t), _)              => Some((Some(h()), None), (t(), Empty))
+      case (_, Cons(h, t))              => Some((None, Some(h())), (Empty, t()))
+      case _                            => None
+    }
 }
 
 case object Empty extends Stream[Nothing]
@@ -130,6 +170,62 @@ object Stream {
     */
   def apply[A](as: A*): Stream[A] =
     if (as.isEmpty) empty else cons(as.head, apply(as.tail: _*))
+
+  def constant[A](a: A): Stream[A] = cons(a, constant(a))
+
+  def from(n: Int): Stream[Int] = cons(n, from(n + 1))
+
+  //  Write a function fibs that generates the infinite stream of Fibonacci numbers: 0, 1, 1,
+  //  2, 3, 5, 8, and so on.
+  def fibs: Stream[Int] = {
+
+    def loop(n1: Int, n2: Int): Stream[Int] = {
+      cons(n1, loop(n2, n1 + n2))
+    }
+
+    loop(0, 1)
+  }
+
+  /**
+    * Write a more general stream-building function called unfold. It takes an initial state,
+    * and a function for producing both the next state and the next value in the generated
+    * stream.
+    *
+    * Option is used to indicate when the Stream should be terminated, if at all. The function
+    * unfold is a very general Stream-building function.
+    * The unfold function is an example of what’s sometimes called a corecursive function.
+    * Whereas a recursive function consumes data, a corecursive function produces
+    * data. And whereas recursive functions terminate by recursing on smaller inputs, corecursive
+    * functions need not terminate so long as they remain productive, which just
+    * means that we can always evaluate more of the result in a finite amount of time. The
+    * unfold function is productive as long as f terminates, since we just need to run the
+    * function f one more time to generate the next element of the Stream. Corecursion is
+    * also sometimes called guarded recursion, and productivity is also sometimes called
+    * cotermination. These terms arent that important to our discussion, but you'll hear
+    * them used sometimes in the context of functional programming. If you're curious to
+    * learn where they come from and understand some of the deeper connections, follow
+    * the references in the chapter notes.
+    */
+  def unfold[A, S](z: S)(f: S => Option[(A, S)]): Stream[A] =
+    f(z) match {
+      case None         => empty
+      case Some((a, s)) => cons(a, unfold(s)(f))
+    }
+
+  /**
+    * Write fibs, from, constant, and ones in terms of unfold
+    */
+
+  def fibsViaUnfold: Stream[Int] =
+    unfold((0, 1))(i => Some(i._1, (i._2, i._1 + i._2)))
+
+  def fromViaUnfold(n: Int): Stream[Int] =
+    unfold(n)(i => Some((i, i + 1)))
+
+  def constantViaUnfold(n: Int): Stream[Int] =
+    unfold(n)(i => Some(i, i))
+
+  def onesViaUnfold = unfold(1)(_ => Some(1, 1))
 
 }
 
@@ -175,7 +271,7 @@ object StreamApp {
         foldRight("filter")(empty[A])((a, b) => if (p(a)) cons(a, b) else b)
 
       The call to Stream(1,2,3,4).map(_ + 10).filter(_ % 2 == 0).toList will produce the following result showing the
-       interleave of map and filter operations:
+      interleaving of map and filter operations:
 
       map
       filter
@@ -195,11 +291,13 @@ object StreamApp {
       Cons(chapter05.Stream$$$Lambda$7/897913732@58ceff1,chapter05.Stream$$$Lambda$8/1688019098@7c30a502)
 
      */
-    val stream = Stream(1,2,3,4).map(_ + 10).filter(_ % 2 == 0).toList
+    val stream = Stream(1,2,3,4)
 
-    println(stream)
+    println(stream.map(_ + 10).filter(_ % 2 == 0).toList)
 
-    println(Stream(1, 2, 3, 4).map(_ + 10))
+    println(stream.map(_ + 10))
+
+    println(stream.mapViaUnfold(_ + 10).toList)
 
   }
 
