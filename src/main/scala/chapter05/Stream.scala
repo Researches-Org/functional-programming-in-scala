@@ -177,6 +177,40 @@ sealed trait Stream[+A] {
       case (h,h2) => h == h2
     }
 
+  /**
+    * Implement tails using unfold. For a given Stream, tails returns the Stream of suffixes
+    * of the input sequence, starting with the original Stream. For example, given
+    * Stream(1,2,3), it would return Stream(Stream(1,2,3), Stream(2,3), Stream(3),
+    * Stream()).
+    */
+  def tails: Stream[Stream[A]] =
+    unfold(this) {
+      case Cons(h, t) => Some( Cons(h, t) , t() )
+      case Empty      => None
+    } append Stream(empty)
+
+  def hasSubsequence[A](s: Stream[A]): Boolean =
+    tails exists (_ startsWith s)
+
+  /**
+    * Hard: Generalize tails to the function scanRight, which is like a foldRight that
+    * returns a stream of the intermediate results. For example:
+    * scala> Stream(1,2,3).scanRight(0)(_ + _).toList
+    * res0: List[Int] = List(6,5,3,0)
+    * This example should be equivalent to the expression List(1+2+3+0, 2+3+0, 3+0, 0).
+    * Your function should reuse intermediate results so that traversing a Stream with n
+    * elements always takes time linear in n. Can it be implemented using unfold? How, or
+    * why not? Could it be implemented using another function we’ve written?
+    */
+  def scanRight[B](z: B)(f: (A, => B) => B): Stream[B] =
+    foldRight((z, Stream(z)))((a, p0) => {
+      // p0 is passed by-name and used in by-name args in f and cons. So use lazy val to ensure only one evaluation...
+      lazy val p1 = p0
+      val b2 = f(a, p1._1)
+      (b2, cons(b2, p1._2))
+    })._2
+
+
 }
 
 case object Empty extends Stream[Nothing]
@@ -250,7 +284,6 @@ object Stream {
       case None         => empty
       case Some((a, s)) => cons(a, unfold(s)(f))
     }
-
 
   /**
     * Write fibs, from, constant, and ones in terms of unfold
@@ -333,11 +366,11 @@ object StreamApp {
      */
     val stream = Stream(1, 2, 3, 4)
 
-//    println(stream.map(_ + 10).filter(_ % 2 == 0).toList)
-//
-//    println(stream.map(_ + 10))
-//
-//    println(stream.mapViaUnfold(_ + 10).toList)
+    println(stream.map(_ + 10).filter(_ % 2 == 0).toList)
+
+    println(stream.map(_ + 10))
+
+    println(stream.mapViaUnfold(_ + 10).toList)
 
     val stream2 = Stream(1,2)
 
@@ -345,14 +378,19 @@ object StreamApp {
 
     val stream4 = Stream(1, 2, 3, 4, 5)
 
-//    println(stream.startsWith(stream2))
+    println(stream.startsWith(stream2))
     println(stream.startsWithViaUnfold(stream2))
 
-//    println(stream.startsWith(stream3))
+    println(stream.startsWith(stream3))
     println(stream.startsWithViaUnfold(stream3))
 
-//    println(stream.startsWith(stream4))
+    println(stream.startsWith(stream4))
     println(stream.startsWithViaUnfold(stream4))
+
+    println(stream.tails.toList.length)
+    stream.tails.toList.foreach(s => {
+      println(s.toList)
+    })
 
   }
 
