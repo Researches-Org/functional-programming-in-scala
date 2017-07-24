@@ -138,6 +138,45 @@ sealed trait Stream[+A] {
       case (_, Cons(h, t))              => Some((None, Some(h())), (Empty, t()))
       case _                            => None
     }
+
+  /**
+    * INCORRECT DUE TO MISUSE OF NON-STRICTNESS:
+    * This implementation of startsWithViaUnfold is incorrect because the function
+    * unfold is called to produce a stream and this stream is never used, so the corecursion
+    * in unfold is never executed and the local variable result is never updated. The reason
+    * behind this the use of the non-strict (lazy) function cons whose second parameter is executed
+    * only when necessary because of the laziness declaration on it.
+    */
+  def startsWithIncorrectViaUnfold[A](s: Stream[A]): Boolean = {
+    var result = false
+
+    unfold((this, s)) {
+      case (Cons(h1, t1), Cons(h2, t2)) if (h1() == h2()) => Some(h1(), (t1(), t2()))
+      case (_, Empty)                                     => {result = true; None}
+      case (_, Cons(_, _))                                => None
+    }
+
+    result
+  }
+
+  def startsWithViaUnfold[A](s: Stream[A]): Boolean = {
+    var result = false
+
+    // use of toList to force the evaluation of corecursion in unfold due to the non-strict cons function
+    unfold((this, s)) {
+      case (Cons(h1, t1), Cons(h2, t2)) if (h1() == h2()) => Some(h1(), (t1(), t2()))
+      case (_, Empty)                                     => {result = true; None}
+      case (_, Cons(_, _))                                => None
+    }.toList
+
+    result
+  }
+
+  def startsWith[A](s: Stream[A]): Boolean =
+    zipAll(s).takeWhile(!_._2.isEmpty) forAll {
+      case (h,h2) => h == h2
+    }
+
 }
 
 case object Empty extends Stream[Nothing]
@@ -211,6 +250,7 @@ object Stream {
       case None         => empty
       case Some((a, s)) => cons(a, unfold(s)(f))
     }
+
 
   /**
     * Write fibs, from, constant, and ones in terms of unfold
@@ -291,13 +331,28 @@ object StreamApp {
       Cons(chapter05.Stream$$$Lambda$7/897913732@58ceff1,chapter05.Stream$$$Lambda$8/1688019098@7c30a502)
 
      */
-    val stream = Stream(1,2,3,4)
+    val stream = Stream(1, 2, 3, 4)
 
-    println(stream.map(_ + 10).filter(_ % 2 == 0).toList)
+//    println(stream.map(_ + 10).filter(_ % 2 == 0).toList)
+//
+//    println(stream.map(_ + 10))
+//
+//    println(stream.mapViaUnfold(_ + 10).toList)
 
-    println(stream.map(_ + 10))
+    val stream2 = Stream(1,2)
 
-    println(stream.mapViaUnfold(_ + 10).toList)
+    val stream3 = Stream(1, 2, 3, 4)
+
+    val stream4 = Stream(1, 2, 3, 4, 5)
+
+//    println(stream.startsWith(stream2))
+    println(stream.startsWithViaUnfold(stream2))
+
+//    println(stream.startsWith(stream3))
+    println(stream.startsWithViaUnfold(stream3))
+
+//    println(stream.startsWith(stream4))
+    println(stream.startsWithViaUnfold(stream4))
 
   }
 
