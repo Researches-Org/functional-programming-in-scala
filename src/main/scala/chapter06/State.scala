@@ -19,7 +19,7 @@ case class State[S,+A](run: S => (A, S)) {
     })
 
   def map2[B,C](sb: State[S, B])(f: (A, B) => C): State[S, C] =
-    flatMap(a => sb.flatMap( b => unit( f(a, b) ) ) )
+    flatMap(a => sb.map( b => f(a, b)  ) )
 
 }
 
@@ -42,21 +42,6 @@ object State {
     State((s: S) => go(s,sas,List()))
   }
 
-  /**
-    * Tail recursive implementation of sequence
-    */
-  def sequence1[S, A](sas: List[State[S, A]]): State[S, List[A]] = {
-
-    @annotation.tailrec
-    def go(fs: List[State[S, A]], rs: State[S, List[A]]): State[S, List[A]] =
-      fs match {
-        case Nil    => rs
-        case h :: t => go(t, cons(h, rs))
-      }
-
-    go(sas, unit(Nil))
-  }
-
   def cons[S, A](r: State[S, A], rs: State[S, List[A]]): State[S, List[A]] =
     r.map2(rs)(_::_)
 
@@ -64,10 +49,12 @@ object State {
 
   def set[S](s: S): State[S, Unit] = State(_ => ((), s))
 
-  def modify[S](f: S => S): State[S, Unit] = for {
-    s <- get // Gets the current state and assigns it to `s`.
-    _ <- set(f(s)) // Sets the new state to `f` applied to `s`.
-  } yield ()
+  def modify[S](f: S => S): State[S, Unit] =
+    for {
+      s <- get // Gets the current state and assigns it to `s`.
+      _ <- set(f(s)) // Sets the new state to `f` applied to `s`.
+    } yield ()
+
 
   def modify1[S](f: S => S): State[S, Unit] =
     get.flatMap(s => set(f(s)).map(_ => ()))

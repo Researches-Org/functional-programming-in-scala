@@ -50,16 +50,18 @@ import State._
 import Candy._
 
 object Candy {
-  def update = (i: Input) => (s: Machine) =>
-    (i, s) match {
-      case (_, Machine(_, 0, _)) => s
-      case (Coin, Machine(false, _, _)) => s
-      case (Turn, Machine(true, _, _)) => s
-      case (Coin, Machine(true, candy, coin)) =>
-        Machine(false, candy, coin + 1)
-      case (Turn, Machine(false, candy, coin)) =>
-        Machine(true, candy - 1, coin)
-    }
+  def update =
+    (i: Input) => (s: Machine) =>
+      (i, s) match {
+        case (_, Machine(_, 0, _)) => s
+        case (Coin, Machine(false, _, _)) => s
+        case (Turn, Machine(true, _, _)) => s
+        case (Coin, Machine(true, candy, coin)) =>
+          Machine(false, candy, coin + 1)
+        case (Turn, Machine(false, candy, coin)) =>
+          Machine(true, candy - 1, coin)
+      }
+
 
   def simulateMachine(inputs: List[Input]): State[Machine, (Int, Int)] = for {
     _ <- sequence(inputs map (modify[Machine] _ compose update))
@@ -75,9 +77,12 @@ object Candy {
     *
     * So we will have a list of State[Machine, Unit]
     *
-    * The sequence method transform this list into a State[Machine, List[Unit]]
+    * The sequence method transform this list into a State[Machine, List[Unit]].
+    * The execution of each state is performed so the final Machine will have the
+    * result.
     *
-    *
+    * With the final state State[Machine, List[Unit]] the map is executed to
+    * transform the result value in a pair of coins and candies.
     */
   def simulateMachine1(inputs: List[Input]): State[Machine, (Int, Int)] =
     sequence(inputs.map(i => modify[Machine](update(i)))).flatMap(_ => get.map(s => (s.coins, s.candies)))
@@ -87,23 +92,9 @@ object MachineApp {
   def main(args: Array[String]): Unit = {
     val inputs = List(Coin, Turn, Coin, Turn, Coin, Turn, Coin, Turn)
 
-    val fn: Input => State[Machine, Unit] =  (i => modify[Machine](update(i)))
-
-    println(fn(Coin))
-
-    val r = inputs.map(modify[Machine] _ compose update)
-
-    val v1 = simulateMachine(inputs)
+    val v1 = simulateMachine1(inputs)
 
     println(v1.run(Machine(true, 5, 10))._1)
-
-    val v2 = simulateMachine1(inputs)
-
-    println(v2.run(Machine(true, 5, 10))._1)
-
-    println(Machine(true, 5, 10).simulateMachine(inputs).run(null)._1)
-
-    println(r)
 
   }
 }
