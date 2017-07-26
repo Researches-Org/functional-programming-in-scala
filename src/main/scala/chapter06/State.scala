@@ -29,10 +29,23 @@ object State {
 
   def unit[S, A](a: A): State[S, A] = State(run = s => (a, s))
 
+  // This implementation uses a loop internally and is the same recursion
+  // pattern as a left fold. It is quite common with left folds to build
+  // up a list in reverse order, then reverse it at the end.
+  // (We could also use a collection.mutable.ListBuffer internally.)
+  def sequence[S, A](sas: List[State[S, A]]): State[S, List[A]] = {
+    def go(s: S, actions: List[State[S,A]], acc: List[A]): (List[A],S) =
+      actions match {
+        case Nil => (acc.reverse,s)
+        case h :: t => h.run(s) match { case (a,s2) => go(s2, t, a :: acc) }
+      }
+    State((s: S) => go(s,sas,List()))
+  }
+
   /**
     * Tail recursive implementation of sequence
     */
-  def sequence[S, A](sas: List[State[S, A]]): State[S, List[A]] = {
+  def sequence1[S, A](sas: List[State[S, A]]): State[S, List[A]] = {
 
     @annotation.tailrec
     def go(fs: List[State[S, A]], rs: State[S, List[A]]): State[S, List[A]] =
@@ -56,6 +69,9 @@ object State {
     _ <- set(f(s)) // Sets the new state to `f` applied to `s`.
   } yield ()
 
+  def modify1[S](f: S => S): State[S, Unit] =
+    get.flatMap(s => set(f(s)).map(_ => ()))
+
 }
 
 import State._
@@ -64,16 +80,9 @@ object StateApp {
 
   def main(args: Array[String]): Unit = {
 
-    new Rand(s => {
-      (1, s)
-    })
+    println(modify[Int](_))
 
-    val s = modify[Int](s => s)
-
-    val ns = s.run(1)
-
-    println(ns._1)
-    println(ns._2)
+    println(modify1[Int](_))
 
   }
 
