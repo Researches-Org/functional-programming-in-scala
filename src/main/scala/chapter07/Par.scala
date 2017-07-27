@@ -110,6 +110,9 @@ object Par {
     * on some potential parallelism. Essentially, we’re using two threads when one should
     * suffice. This is a symptom of a more serious problem with the implementation that
     * we’ll discuss later in the chapter.
+    *
+    * It requires thread pools that can grow unbounded.
+    *
     * @param a
     * @tparam A
     * @return - Parallel description
@@ -118,6 +121,9 @@ object Par {
     es => es.submit(new Callable[A] {
       def call = a(es).get
     })
+
+  def delay[A](fa: => Par[A]): Par[A] =
+    es => fa(es)
 
   /**
     * Let's now return to the question of whether unit should be strict or lazy. With
@@ -312,6 +318,8 @@ object Par {
       val (l, r) = paragraphs.splitAt(paragraphs.length / 2)
       map2(fork(countWords(l)), fork(countWords(r)))(_+_)
     }
+
+  def equal[A](e: ExecutorService)(p1: Par[A], p2: Par[A]): Boolean = p1(e).get == p2(e).get
 
 
 }
