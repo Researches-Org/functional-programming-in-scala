@@ -19,7 +19,7 @@ object ListAddition {
 
 object ListAdditionApp {
 
-  def main(args: Array[String]): UnitPar = {
+  def main(args: Array[String]): Unit = {
     println(sum( List(1, 2, 3, 4, 5, 6, 7, 8, 9, 10) ))
 
     println(sum( Array(1, 2, 3, 4, 5, 6, 7, 8, 9, 10)))
