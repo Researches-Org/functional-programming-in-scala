@@ -241,13 +241,38 @@ object Par {
     */
   def sortPar(parList: Par[List[Int]]): Par[List[Int]] = map(parList)(_.sorted)
 
+  // This implementation forks the recursive step off to a new logical thread,
+  // making it effectively tail-recursive. However, we are constructing
+  // a right-nested parallel program, and we can get better performance by
+  // dividing the list in half, and running both halves in parallel.
+  // See `sequenceBalanced` below.
+  def sequenceRight[A](as: List[Par[A]]): Par[List[A]] =
+  as match {
+    case Nil => unit(Nil)
+    case h :: t => map2(h, fork(sequenceRight(t)))(_ :: _)
+  }
+
+  // We define `sequenceBalanced` using `IndexedSeq`, which provides an
+  // efficient function for splitting the sequence in half.
+  def sequenceBalanced[A](as: IndexedSeq[Par[A]]): Par[IndexedSeq[A]] = fork {
+    if (as.isEmpty) unit(Vector())
+    else if (as.length == 1) map(as.head)(a => Vector(a))
+    else {
+      val (l,r) = as.splitAt(as.length/2)
+      map2(sequenceBalanced(l), sequenceBalanced(r))(_ ++ _)
+    }
+  }
+
+  def sequence[A](as: List[Par[A]]): Par[List[A]] =
+    map(sequenceBalanced(as.toIndexedSeq))(_.toList)
+
   /**
     * Hard: Write this function, called sequence. No additional primitives are required. Do not call run.
     * @param ps
     * @tparam A
     * @return
     */
-  def sequence[A](ps: List[Par[A]]): Par[List[A]] =
+  def sequence1[A](ps: List[Par[A]]): Par[List[A]] =
     (es: ExecutorService) => UnitFuture( ps.map(p => p(es).get()) )
 
   def parMap[A,B](ps: List[A])(f: A => B): Par[List[B]] = fork {
@@ -320,6 +345,65 @@ object Par {
     }
 
   def equal[A](e: ExecutorService)(p1: Par[A], p2: Par[A]): Boolean = p1(e).get == p2(e).get
+
+  def choice[A](cond: Par[Boolean])(t: Par[A], f: Par[A]): Par[A] =
+    es =>
+      if (run(es)(cond).get) t(es)
+      else f(es)
+
+  /**
+    * Let’s say that choiceN runs n, and then uses that to select a parallel computation from
+    * choices. This is a bit more general than choice.
+    *
+    * @param n
+    * @param choices
+    * @tparam A
+    * @return
+    */
+  def choiceN[A](n: Par[Int])(choices: List[Par[A]]): Par[A] =
+    es => choices(run(es)(n).get)(es)
+
+  def choiceViaChoiceN[A](cond: Par[Boolean])(t: Par[A], f: Par[A]): Par[A] =
+    choiceN(map(cond)(b => if (b) 0 else 1))(List(t, f))
+
+  def choiceMap[K,V](key: Par[K])(choices: Map[K,Par[V]]): Par[V] =
+    es => choices( run(es)(key).get )(es)
+
+  def chooser[A,B](pa: Par[A])(choices: A => Par[B]): Par[B] =
+    es => choices(run(es)(pa).get)(es)
+
+  /* `chooser` is usually called `flatMap` or `bind`. */
+  def flatMap[A,B](p: Par[A])(choices: A => Par[B]): Par[B] =
+    es => {
+      val k = run(es)(p).get
+      run(es)(choices(k))
+    }
+
+  def choiceViaFlatMap[A](p: Par[Boolean])(f: Par[A], t: Par[A]): Par[A] =
+    flatMap(p)(b => if (b) t else f)
+
+  def choiceNViaFlatMap[A](p: Par[Int])(choices: List[Par[A]]): Par[A] =
+    flatMap(p)(i => choices(i))
+
+  def join[A](a: Par[Par[A]]): Par[A] =
+    es => run(es)(run(es)(a).get())
+
+  def joinViaFlatMap[A](a: Par[Par[A]]): Par[A] =
+    flatMap(a)(x => x)
+
+  def flatMapViaJoin[A,B](p: Par[A])(f: A => Par[B]): Par[B] =
+    join(map(p)(f))
+
+  /* Gives us infix syntax for `Par`. */
+  implicit def toParOps[A](p: Par[A]): ParOps[A] = new ParOps(p)
+
+  // infix versions of `map`, `map2` and `flatMap`
+  class ParOps[A](p: Par[A]) {
+    def map[B](f: A => B): Par[B] = Par.map(p)(f)
+    def map2[B,C](b: Par[B])(f: (A,B) => C): Par[C] = Par.map2(p,b)(f)
+    def flatMap[B](f: A => Par[B]): Par[B] = Par.flatMap(p)(f)
+    def zip[B](b: Par[B]): Par[(A,B)] = p.map2(b)((_,_))
+  }
 
 
 }

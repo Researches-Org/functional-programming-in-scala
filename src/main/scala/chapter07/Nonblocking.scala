@@ -4,7 +4,6 @@ import java.util.concurrent.{Callable, CountDownLatch, ExecutorService, Executor
 import java.util.concurrent.atomic.AtomicReference
 
 import Nonblocking.Par._
-import chapter07.Actor._
 
 /**
   * Using local side effects for a pure API
@@ -235,6 +234,80 @@ object Nonblocking {
 
     def parMap[A,B](as: List[A])(f: A => B): Par[List[B]] =
       sequence(as.map(asyncF(f)))
+
+    def choice[A](p: Par[Boolean])(t: Par[A], f: Par[A]): Par[A] =
+      es => new Future[A] {
+        def apply(cb: A => Unit): Unit =
+          p(es) { b =>
+            if (b) eval(es) { t(es)(cb) }
+            else eval(es) { f(es)(cb) }
+          }
+      }
+
+    def choiceN[A](n: Par[Int])(choices: List[Par[A]]): Par[A] =
+      es => new Future[A] {
+        override def apply(cb: (A) => Unit): Unit = {
+          n(es) {
+            i => eval(es){ choices(i)(es)(cb) }
+          }
+        }
+      }
+
+    def choiceMap[K,V](key: Par[K])(choices: Map[K,Par[V]]): Par[V] =
+      es => new Future[V] {
+        override def apply(cb: (V) => Unit): Unit = {
+          key(es) {
+            k => eval(es) { choices(k)(es)(cb) }
+          }
+        }
+      }
+
+    def choiceViaChoiceN[A](cond: Par[Boolean])(t: Par[A], f: Par[A]): Par[A] =
+      choiceN(map(cond)(b => if (b) 0 else 1))(List(t, f))
+
+    def chooser[A,B](pa: Par[A])(choices: A => Par[B]): Par[B] =
+      es => new Future[B] {
+        override def apply(cb: (B) => Unit): Unit = {
+          pa(es) {
+            a => choices(a)(es)(cb)
+          }
+        }
+      }
+
+    def flatMap[A,B](p: Par[A])(f: A => Par[B]): Par[B] =
+      es => new Future[B] {
+        def apply(cb: B => Unit): Unit =
+          p(es)(a => f(a)(es)(cb))
+      }
+
+    def choiceViaFlatMap[A](p: Par[Boolean])(f: Par[A], t: Par[A]): Par[A] =
+      flatMap(p)(b => if (b) t else f)
+
+    def choiceNViaFlatMap[A](p: Par[Int])(choices: List[Par[A]]): Par[A] =
+      flatMap(p)(i => choices(i))
+
+    def join[A](p: Par[Par[A]]): Par[A] =
+      es => new Future[A] {
+        def apply(cb: A => Unit): Unit =
+          p(es)(p2 => eval(es) { p2(es)(cb) })
+      }
+
+    def joinViaFlatMap[A](a: Par[Par[A]]): Par[A] =
+      flatMap(a)(x => x)
+
+    def flatMapViaJoin[A,B](p: Par[A])(f: A => Par[B]): Par[B] =
+      join(map(p)(f))
+
+    /* Gives us infix syntax for `Par`. */
+    implicit def toParOps[A](p: Par[A]): ParOps[A] = new ParOps(p)
+
+    // infix versions of `map`, `map2` and `flatMap`
+    class ParOps[A](p: Par[A]) {
+      def map[B](f: A => B): Par[B] = Par.map(p)(f)
+      def map2[B,C](b: Par[B])(f: (A,B) => C): Par[C] = Par.map2(p,b)(f)
+      def flatMap[B](f: A => Par[B]): Par[B] = Par.flatMap(p)(f)
+      def zip[B](b: Par[B]): Par[(A,B)] = p.map2(b)((_,_))
+    }
 
   }
 

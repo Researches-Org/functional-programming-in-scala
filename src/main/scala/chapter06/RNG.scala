@@ -19,6 +19,8 @@ object RNG {
 
   def unit[A](a: A): Rand[A] = rng => (a, rng)
 
+  def boolean(rng: RNG): (Boolean, RNG) =
+    rng.nextInt match { case (i,rng2) => (i%2==0,rng2) }
 
   //  def map[S,A,B](a: S => (A,S))(f: A => B): S => (B,S) =
   def map[A, B](s: Rand[A])(f: A => B): Rand[B] =
