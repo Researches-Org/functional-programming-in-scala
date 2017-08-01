@@ -13,8 +13,10 @@ trait Functor[F[_]] {
       case Right(fb) => map(fb)(Right(_))
     }
 
-  val listFunctor = new Functor[List] {
-    override def map[A, B](fa: List[A])(f: (A) => B) = fa map f
-  }
+}
 
+object Functor {
+  val listFunctor = new Functor[List] {
+    def map[A,B](as: List[A])(f: A => B): List[B] = as map f
+  }
 }
