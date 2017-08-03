@@ -50,7 +50,7 @@ import IO._
 object Game {
 
   def contest(p1: Player, p2: Player): IO[Unit] =
-    PrintLine(winnerMsg(winner(p1, p2)))
+    IO.PrintLine(winnerMsg(winner(p1, p2)))
 
   def winnerMsg(p: Option[Player]): String = p map {
     case Player(name, _) => s"${name} is the winner!"
@@ -72,14 +72,14 @@ object Temperature {
     (f - 32) * 5.0 / 9.0
 
   def converter: IO[Unit] = for {
-    _ <- PrintLine("Enter a temperature in degrees fahrenheit: ")
-    d <- Readline.map(_.toDouble)
-    _ <- PrintLine(fahrenheitToCelcius(d).toString)
+    _ <- IO.PrintLine("Enter a temperature in degrees fahrenheit: ")
+    d <- IO.Readline.map(_.toDouble)
+    _ <- IO.PrintLine(fahrenheitToCelcius(d).toString)
   } yield()
 
   def main(args: Array[String]): Unit = {
-    val io = PrintLine("Enter a temperature in degrees fahrenheit:")
-      .flatMap(_ => Readline.map(_.toDouble).map(d => PrintLine(fahrenheitToCelcius(d).toString).run))
+    val io = IO.PrintLine("Enter a temperature in degrees fahrenheit:")
+      .flatMap(_ => IO.Readline.map(_.toDouble).map(d => IO.PrintLine(fahrenheitToCelcius(d).toString).run))
 
     io.run
   }
